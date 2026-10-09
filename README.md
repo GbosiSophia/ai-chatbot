@@ -27,7 +27,7 @@ pip install -r requirements.txt
 
 ### Option 1: Use the Live Application
 
-Visit: `https://ai-chatbot-6jqt.onrender.com/`
+Visit: `https://ai-chatbot-6jqt.onrender.com/index`
 
 Replace this URL with your actual Render URL.
 
