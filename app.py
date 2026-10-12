@@ -10,7 +10,7 @@ print("API KEY FOUND: ", api_key is not None)
 
 client = Groq(api_key=api_key)
 
-# Creating my Gemini function
+# Creating my Groq function
 def generate_response(user_input):
 
     response = client.chat.completions.create(
