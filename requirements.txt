@@ -3,3 +3,5 @@ Flask
 groq
 requests
 gunicorn
+google-genai
+openai

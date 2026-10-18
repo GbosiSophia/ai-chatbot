@@ -1,73 +1,129 @@
+
+import os
+
 from flask import Flask, render_template, request, jsonify
 from dotenv import load_dotenv
 from groq import Groq
-import os
+from google import genai
+from openai import OpenAI
 
 load_dotenv()
-api_key = os.getenv("GROQ_API_KEY")
-print("Current folder:", os.getcwd())
-print("API KEY FOUND: ", api_key is not None)
-
-client = Groq(api_key=api_key)
-
-# Creating my Groq function
-def generate_response(user_input):
-
-    response = client.chat.completions.create(
-        model="openai/gpt-oss-20b",
-        messages=[{
-                "role": "system",
-                "content": """
-                You are a helpful AI assistant.
-                Format your answers for easy reading.
-
-                Follow these rules:
-                1. Use a clear heading when appropriate.
-                2. Use bullet points for lists.
-                3. Use numbered steps for instructions.
-                4. Keep paragraphs short.
-                5. Use simple language.
-                6. Avoid unnecessary repetition.
-                7. Use examples when they help explain a concept.
-                """
-            },
-            {
-            "role": "user",
-            "content": user_input
-        }]
-    )
-
-    return response.choices[0].message.content
 
 app = Flask(__name__)
 
-@app.route('/')
-@app.route('/index')
-def index():
-    return render_template('index.html')
+# Configure API clients
+groq_key = os.getenv("GROQ_API_KEY")
+gemini_key = os.getenv("GEMINI_API_KEY")
+openrouter_key = os.getenv("OPENROUTER_API_KEY")
+openrouter_model = os.getenv("OPENROUTER_MODEL")
 
-@app.route('/process', methods=['GET', 'POST'])
+openrouter_client = (
+    OpenAI(
+        api_key=openrouter_key,
+        base_url="https://openrouter.ai/api/v1"
+    )
+    if openrouter_key
+    else None
+)
+
+groq_client = Groq(api_key=groq_key) if groq_key else None
+gemini_client = genai.Client(api_key=gemini_key) if gemini_key else None
+
+SYSTEM_PROMPT = """
+You are a helpful AI assistant.
+Format your answers for easy reading.
+
+Follow these rules:
+1. Use clear headings when appropriate.
+2. Use bullet points for lists.
+3. Use numbered steps for instructions.
+4. Keep paragraphs short.
+5. Use simple language.
+6. Avoid unnecessary repetition.
+7. Use examples when helpful.
+"""
+
+
+def generate_response(user_input, provider):
+    if provider == "groq":
+        if groq_client is None:
+            raise ValueError("Groq API key is not configured.")
+
+        response = groq_client.chat.completions.create(
+            model="openai/gpt-oss-20b",
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_input}
+            ]
+        )
+
+        return response.choices[0].message.content
+
+    elif provider == "gemini":
+        if gemini_client is None:
+            raise ValueError("Gemini API key is not configured.")
+
+        response = gemini_client.models.generate_content(
+            model="models/gemini-2.5-flash-lite",
+            contents=f"{SYSTEM_PROMPT}\n\nUser: {user_input}"
+        )
+
+        return response.text
+
+    elif provider == "openrouter":
+        if openrouter_client is None:
+            raise ValueError("OpenRouter API key is not configured.")
+
+        if not openrouter_model:
+            raise ValueError("OpenRouter model is not configured.")
+
+        response = openrouter_client.chat.completions.create(
+            model=openrouter_model,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_input}
+            ]
+        )
+        return response.choices[0].message.content
+
+    else:
+        raise ValueError("Unsupported AI provider.")
+
+
+@app.route("/")
+@app.route("/index")
+def index():
+    return render_template("index.html")
+
+
+@app.route("/process", methods=["POST"])
 def process():
     try:
-        # Get JSON data sent from javascript
-        data = request.get_json()
-        # Get the user's message from the JSON data
-        user_input = data.get('user_input')
+        data = request.get_json(silent=True) or {}
 
-        print("User input:", user_input)
+        user_input = data.get("user_input", "").strip()
+        provider = data.get("provider", "groq").lower()
 
-        # Process the user input and generate a response
-        response = generate_response(user_input)
+        if not user_input:
+            return jsonify({"error": "Please enter a message."}), 400
 
-        # Sending the response back to java script
+        if provider not in ("groq", "gemini","openrouter"):
+            return jsonify({"error": "Unsupported AI provider."}), 400
+
+        response = generate_response(user_input, provider)
+
+        return jsonify({"response": response})
+
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 400
+
+    except Exception:
+        app.logger.exception("Error processing chatbot request")
+
         return jsonify({
-            'response': response
-        })
-    except Exception as e:
-        print(f"Error processing input: {e}")
-        return jsonify({
-            "error": "An error occurred while processing your request."
-            }), 500
+            "error": "The AI request failed. Please try again."
+        }), 500
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     app.run(debug=True)
