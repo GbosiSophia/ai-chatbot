@@ -64,7 +64,7 @@ def generate_response(user_input, provider):
             raise ValueError("Gemini API key is not configured.")
 
         response = gemini_client.models.generate_content(
-            model="models/gemini-2.5-flash-lite",
+            model="models/gemini-3.1-flash-lite",
             contents=f"{SYSTEM_PROMPT}\n\nUser: {user_input}"
         )
 
