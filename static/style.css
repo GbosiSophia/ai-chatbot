@@ -34,15 +34,16 @@ header h1 {
 }
 
 #new-chat,
-#send-button {
-    padding: 10px 14px;
-    border: none;
+#send-button, #logout-button {
+    padding: 15px 14px;
+    border: 5px;
     border-radius: 8px;
     cursor: pointer;
 }
 
-#new-chat {
+#new-chat, #logout-button {
     width: 100%;
+    padding:0;
     background: #ff2d9a;
     color: #fff;
 }

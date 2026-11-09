@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login — AI Chatbot</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
+
+</head>
+<body>
+    <main id="login-container">
+        <h1>Sign in</h1>
+
+        <div id="email-step">
+            <label for="email">Email address</label>
+            <input type="email" id="email" placeholder="you@example.com">
+            <button id="send-code" type="button">Send code</button>
+            <p id="login-status"></p>
+        </div>
+
+        <div id="code-step" hidden>
+            <label for="code">Enter the 6-digit code</label>
+            <input type="text" id="code" inputmode="numeric"
+                   maxlength="6" placeholder="123456">
+            <button id="verify-code" type="button">Verify</button>
+            <p id="verify-status"></p>
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        const SUPABASE_URL = "https://ntjbtrfylevgokiosnob.supabase.co";
+        const SUPABASE_ANON_KEY = "sb_publishable_03nE9ZE6DmPWBi9OfHd4Tg_7N-pSLCd";
+        const supabaseClient = window.supabase.createClient(
+            SUPABASE_URL, SUPABASE_ANON_KEY
+        );
+
+        const emailInput = document.querySelector("#email");
+        const sendCodeBtn = document.querySelector("#send-code");
+        const loginStatus = document.querySelector("#login-status");
+        const emailStep = document.querySelector("#email-step");
+        const codeStep = document.querySelector("#code-step");
+        const codeInput = document.querySelector("#code");
+        const verifyBtn = document.querySelector("#verify-code");
+        const verifyStatus = document.querySelector("#verify-status");
+
+        let pendingEmail = "";
+
+        sendCodeBtn.addEventListener("click", async () => {
+            const email = emailInput.value.trim();
+            if (!email) {
+                loginStatus.textContent = "Please enter your email.";
+                return;
+            }
+
+            sendCodeBtn.disabled = true;
+            loginStatus.textContent = "Sending code...";
+
+            const { error } = await supabaseClient.auth.signInWithOtp({
+                email,
+                options: { shouldCreateUser: true }
+            });
+
+            sendCodeBtn.disabled = false;
+
+            if (error) {
+                loginStatus.textContent = "Error: " + error.message;
+                return;
+            }
+
+            pendingEmail = email;
+            loginStatus.textContent = "Check your email for the code.";
+            emailStep.hidden = true;
+            codeStep.hidden = false;
+            codeInput.focus();
+        });
+
+        verifyBtn.addEventListener("click", async () => {
+            const token = codeInput.value.trim();
+            if (token.length !== 6) {
+                verifyStatus.textContent = "Enter the 6-digit code.";
+                return;
+            }
+
+            verifyBtn.disabled = true;
+            verifyStatus.textContent = "Verifying...";
+
+            const { error } = await supabaseClient.auth.verifyOtp({
+                email: pendingEmail,
+                token,
+                type: "email"
+            });
+
+            verifyBtn.disabled = false;
+
+            if (error) {
+                verifyStatus.textContent = "Error: " + error.message;
+                return;
+            }
+
+            window.location.href = "/";
+        });
+    </script>
+</body>
+</html>

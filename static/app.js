@@ -1,4 +1,11 @@
+const SUPABASE_URL = 'https://ntjbtrfylevgokiosnob.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_03nE9ZE6DmPWBi9OfHd4Tg_7N-pSLCd';
+//Create a Supabase client instance
+const supabaseClient = window.supabase.createClient(
+                                    SUPABASE_URL, 
+                                    SUPABASE_ANON_KEY);
 
+// DOM References
 const sendButton = document.querySelector("#send-button");
 const userInput = document.querySelector("#user-input");
 const chatReply = document.querySelector("#response-box");
@@ -6,48 +13,69 @@ const newChatButton = document.querySelector("#new-chat");
 const chatList = document.querySelector("#chat-list");
 const modelSelect = document.querySelector("#model-select");
 
-// Restore saved conversations from the browser.
-let conversations = JSON.parse(
-    localStorage.getItem("conversations") || "{}"
-);
+//Currently selected conversation ID 
+let activeChatId = null;
 
-let activeChatId = localStorage.getItem("activeChatId");
+//Currently authenticated user session
+let currentSession = null;
 
-function saveChats() {
-    localStorage.setItem(
-        "conversations",
-        JSON.stringify(conversations)
-    );
+//Authentication guard: Check if the user is authenticated, if not redirect to login page
 
-    localStorage.setItem("activeChatId", activeChatId || "");
+async function requireAuth() {
+    const { data, error } = await supabaseClient.auth.getSession();
+
+    if (error || !data.session) {
+        window.location.href = "/login";
+        return null;
+    }
+
+    currentSession = data.session;
+
+    return currentSession;
 }
 
-// Create a new conversation.
-function createNewChat() {
-    const chatId = crypto.randomUUID();
 
-    conversations[chatId] = {
-        id: chatId,
-        title: "New Chat",
-        messages: [],
-        provider: modelSelect.value
-    };
+//Create a new conversation in the database
+async function createNewChat() {
+    const { data: newChat, error } = await supabaseClient
+        .from("conversations")
+        .insert({
+            user_id: currentSession.user.id,
+            title: "New Chat",
+            provider: modelSelect.value
+        })
+        .select()
+        .single();
 
-    activeChatId = chatId;
+    if (error) {
+        console.error("Failed to create chat:", error);
+        return;
+    }
 
-    saveChats();
-    renderChatHistory();
-    renderActiveChat();
+    activeChatId = newChat.id;
+
+    await renderChatHistory();
+    await renderActiveChat();
 
     userInput.value = "";
     userInput.focus();
 }
 
-// Display conversation titles in the sidebar.
-function renderChatHistory() {
+//Load conversation list into the sidebar
+async function renderChatHistory() {
     chatList.innerHTML = "";
 
-    Object.values(conversations).reverse().forEach(chat => {
+    const { data: chats, error } = await supabaseClient
+        .from("conversations")
+        .select("id, title")
+        .order("updated_at", { ascending: false });
+
+    if (error) {
+        console.error("Failed to load chat history:", error);
+        return;
+    }
+
+    chats.forEach(chat => {
         const item = document.createElement("li");
         const button = document.createElement("button");
 
@@ -58,13 +86,21 @@ function renderChatHistory() {
             button.classList.add("active-chat");
         }
 
-        button.addEventListener("click", () => {
+        button.addEventListener("click", async () => {
             activeChatId = chat.id;
-            modelSelect.value = chat.provider || "groq";
 
-            saveChats();
-            renderChatHistory();
-            renderActiveChat();
+            const { data: convo } = await supabaseClient
+                .from("conversations")
+                .select("provider")
+                .eq("id", chat.id)
+                .single();
+
+            if (convo && convo.provider) {
+                modelSelect.value = convo.provider;
+            }
+
+            await renderChatHistory();
+            await renderActiveChat();
         });
 
         item.appendChild(button);
@@ -73,16 +109,25 @@ function renderChatHistory() {
 }
 
 // Render the selected conversation's messages.
-function renderActiveChat() {
+async function renderActiveChat() {
     chatReply.innerHTML = "";
 
-    const chat = conversations[activeChatId];
-
-    if (!chat) {
+    if (!activeChatId) {
         return;
     }
 
-    chat.messages.forEach(message => {
+    const { data: messages, error } = await supabaseClient
+        .from("messages")
+        .select("role, content")
+        .eq("conversation_id", activeChatId)
+        .order("created_at", { ascending: true });
+
+    if (error) {
+        console.error("Failed to load messages:", error);
+        return;
+    }
+
+    messages.forEach(message => {
         const messageElement = document.createElement("div");
         messageElement.className = `message ${message.role}`;
 
@@ -98,7 +143,8 @@ function renderActiveChat() {
     });
 }
 
-// Send a message and save both sides of the conversation.
+// Send a message: save user msg -> call Flask -> save AI msg
+
 async function sendMessage() {
     const message = userInput.value.trim();
 
@@ -106,31 +152,72 @@ async function sendMessage() {
         return;
     }
 
-    if (!activeChatId || !conversations[activeChatId]) {
-        createNewChat();
+    // Create a conversation on the fly if none is active
+    if (!activeChatId) {
+        const { data: newChat, error } = await supabaseClient
+            .from("conversations")
+            .insert({
+                user_id: currentSession.user.id,
+                title: message.length > 35
+                    ? message.slice(0, 35) + "..."
+                    : message,
+                provider: modelSelect.value
+            })
+            .select()
+            .single();
+
+        if (error) {
+            console.error("Failed to create chat:", error);
+            return;
+        }
+
+        activeChatId = newChat.id;
     }
 
-    const chat = conversations[activeChatId];
+    // Update the conversation's provider
+    await supabaseClient
+        .from("conversations")
+        .update({
+            provider: modelSelect.value,
+            updated_at: new Date().toISOString()
+        })
+        .eq("id", activeChatId);
 
-    // Remember which provider this conversation uses.
-    chat.provider = modelSelect.value;
+    // Save the user message
+    const { error: userMsgError } = await supabaseClient
+        .from("messages")
+        .insert({
+            conversation_id: activeChatId,
+            role: "user",
+            content: message
+        });
 
-    // Use the first user message as the chat title.
-    if (chat.messages.length === 0) {
-        chat.title = message.length > 35
-            ? message.slice(0, 35) + "..."
-            : message;
+    if (userMsgError) {
+        console.error("Failed to save user message:", userMsgError);
+        return;
     }
 
-    chat.messages.push({
-        role: "user",
-        content: message
-    });
+    // Set the title from the first user message if it's still "New Chat"
+    const { data: convo } = await supabaseClient
+        .from("conversations")
+        .select("title")
+        .eq("id", activeChatId)
+        .single();
+
+    if (convo && convo.title === "New Chat") {
+        await supabaseClient
+            .from("conversations")
+            .update({
+                title: message.length > 35
+                    ? message.slice(0, 35) + "..."
+                    : message
+            })
+            .eq("id", activeChatId);
+    }
 
     userInput.value = "";
-    renderActiveChat();
-    saveChats();
-    renderChatHistory();
+    await renderActiveChat();
+    await renderChatHistory();
 
     sendButton.disabled = true;
 
@@ -142,7 +229,7 @@ async function sendMessage() {
             },
             body: JSON.stringify({
                 user_input: message,
-                provider: chat.provider
+                provider: modelSelect.value
             })
         });
 
@@ -152,24 +239,27 @@ async function sendMessage() {
             throw new Error(data.error || `HTTP error: ${response.status}`);
         }
 
-        chat.messages.push({
+        // Save the AI reply
+        await supabaseClient.from("messages").insert({
+            conversation_id: activeChatId,
             role: "assistant",
             content: data.response
         });
 
-        renderActiveChat();
-        saveChats();
+        await renderActiveChat();
+        await renderChatHistory();
 
     } catch (error) {
         console.error("Chat request failed:", error);
 
-        chat.messages.push({
+        // Persist the error so it's visible after refresh
+        await supabaseClient.from("messages").insert({
+            conversation_id: activeChatId,
             role: "assistant",
             content: `Sorry, the request failed: ${error.message}`
         });
 
-        renderActiveChat();
-        saveChats();
+        await renderActiveChat();
 
     } finally {
         sendButton.disabled = false;
@@ -177,14 +267,54 @@ async function sendMessage() {
     }
 }
 
+// Event Listeners
 sendButton.addEventListener("click", sendMessage);
 newChatButton.addEventListener("click", createNewChat);
 
-// Restore the previous chat or create the first one.
-if (activeChatId && conversations[activeChatId]) {
-    modelSelect.value = conversations[activeChatId].provider || "groq";
-    renderChatHistory();
-    renderActiveChat();
-} else {
-    createNewChat();
+// Press Enter to send (Shift+Enter for newline)
+userInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        sendMessage();
+    }
+});
+
+// Sign-out button (see note below — you need to add it to index.html)
+const logoutButton = document.querySelector("#logout-button");
+if (logoutButton) {
+    logoutButton.addEventListener("click", async () => {
+        await supabaseClient.auth.signOut();
+        window.location.href = "/login";
+    });
 }
+
+// Bootstrap: require auth, then restore latest conversation
+
+(async function init() {
+    const session = await requireAuth();
+
+    if (!session) {
+        return; // redirect happened
+    }
+
+    await renderChatHistory();
+
+    // Restore the most recent conversation, or create one
+    const { data: latestChats } = await supabaseClient
+        .from("conversations")
+        .select("id, provider")
+        .order("updated_at", { ascending: false })
+        .limit(1);
+
+    if (latestChats && latestChats.length > 0) {
+        activeChatId = latestChats[0].id;
+
+        if (latestChats[0].provider) {
+            modelSelect.value = latestChats[0].provider;
+        }
+
+        await renderActiveChat();
+    } else {
+        await createNewChat();
+    }
+})();

@@ -1,0 +1,144 @@
+/* Login page styling */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+/* #send-code {
+    width: 100%;
+    padding: 14px 20px;
+    font-size: 1rem;
+    font-weight: 600;
+    border: none;
+    border-radius: 10px;
+    background: #4f46e5;
+    color: #ffffff;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.05s ease;
+} */
+/* Respect HTML hidden attributes */
+[hidden] {
+    display: none !important;
+}
+
+body {
+    min-height: 100vh;
+    background: #e5e7eb;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+                 Roboto, Helvetica, Arial, sans-serif;
+    color: #1f2937;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+
+/* Card Container */
+#login-container {
+    background: #ffffff;
+    width: 100%;
+    max-width: 400px;
+    padding: 40px 32px;
+    border-radius: 16px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+}
+
+#login-container h1 {
+    font-size: 1.6rem;
+    font-weight: 600;
+    margin-bottom: 24px;
+    text-align: center;
+    color: #111827;
+}
+
+/* Form Steps */
+#email-step,
+#code-step {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+label {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #374151;
+    margin-bottom: 2px;
+}
+
+input[type="email"],
+input[type="text"] {
+    width: 100%;
+    padding: 14px 16px;
+    font-size: 1rem;
+    border: 1px solid #d1d5db;
+    border-radius: 10px;
+    background: #f9fafb;
+    color: #111827;
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+input[type="email"]:focus,
+input[type="text"]:focus {
+    border-color: #6366f1;
+    background: #ffffff;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+input[type="text"] {
+    text-align: center;
+    letter-spacing: 0.4em;
+    font-size: 1.3rem;
+    font-weight: 600;
+}
+
+
+/* Buttons */
+   
+button {
+    width: 100%;
+    padding: 14px 20px;
+    font-size: 1rem;
+    font-weight: 600;
+    border: none;
+    border-radius: 10px;
+    background: #4f46e5;
+    color: #ffffff;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.05s ease;
+}
+
+button:hover:not(:disabled) {
+    background: #4338ca;
+}
+
+button:active:not(:disabled) {
+    transform: scale(0.98);
+}
+
+button:disabled {
+    background: #a5b4fc;
+    cursor: not-allowed;
+}
+
+/* Status messages */
+#login-status,
+#verify-status {
+    font-size: 0.875rem;
+    min-height: 1.2em;
+    text-align: center;
+    color: #6b7280;
+}
+
+#login-status.error,
+#verify-status.error {
+    color: #dc2626;
+}
+
+/* Responsive tweak */
+@media (max-width: 480px) {
+    #login-container {
+        padding: 28px 20px;
+    }
+}
