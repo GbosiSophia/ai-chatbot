@@ -19,9 +19,10 @@ let activeChatId = null;
 //Currently authenticated user session
 let currentSession = null;
 
-//Authentication guard: Check if the user is authenticated, if not redirect to login page
 
+// Authentication guard: Check whether the user is authenticated
 async function requireAuth() {
+
     const { data, error } = await supabaseClient.auth.getSession();
 
     if (error || !data.session) {
@@ -34,6 +35,14 @@ async function requireAuth() {
     return currentSession;
 }
 
+// Listen for authentication changes
+supabaseClient.auth.onAuthStateChange((event, session) => {
+
+    if (event === "SIGNED_OUT") {
+        window.location.href = "/login";
+    }
+
+});
 
 //Create a new conversation in the database
 async function createNewChat() {
