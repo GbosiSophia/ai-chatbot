@@ -2,8 +2,16 @@ const SUPABASE_URL = 'https://ntjbtrfylevgokiosnob.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_03nE9ZE6DmPWBi9OfHd4Tg_7N-pSLCd';
 //Create a Supabase client instance
 const supabaseClient = window.supabase.createClient(
-                                    SUPABASE_URL, 
-                                    SUPABASE_ANON_KEY);
+        SUPABASE_URL, 
+        SUPABASE_ANON_KEY,
+                                {
+        auth: {
+            detectSessionInUrl: false,
+            persistSession: true,
+            autoRefreshToken: true
+        }
+    }
+                                );
 
 // DOM References
 const sendButton = document.querySelector("#send-button");
@@ -20,12 +28,41 @@ let activeChatId = null;
 let currentSession = null;
 
 
-// Authentication guard: Check whether the user is authenticated
+// Authentication guard
 async function requireAuth() {
 
+    // Check whether Supabase redirected back with an authentication code
+    const url = new URL(window.location.href);
+    const authCode = url.searchParams.get("code");
+
+    if (authCode) {
+
+        const { data, error } =
+            await supabaseClient.auth.exchangeCodeForSession(authCode);
+
+        if (error) {
+            console.error("Authentication error:", error.message);
+            window.location.href = "/login";
+            return null;
+        }
+
+        // Remove authentication code from the browser URL
+        window.history.replaceState(
+            {},
+            document.title,
+            url.pathname
+        );
+
+        currentSession = data.session;
+
+        return currentSession;
+    }
+
+    // Check for an existing authenticated session
     const { data, error } = await supabaseClient.auth.getSession();
 
     if (error || !data.session) {
+        console.error("No authenticated session:", error);
         window.location.href = "/login";
         return null;
     }
