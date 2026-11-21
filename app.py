@@ -88,16 +88,17 @@ def generate_response(user_input, provider):
     else:
         raise ValueError("Unsupported AI provider.")
         
+
+# Chatbot homepage
 @app.route("/")
-@app.route("/login")
-def login():
-    return render_template("login.html")
-
-
-@app.route("/index")
 def index():
     return render_template("index.html")
 
+
+# Login page
+@app.route("/login")
+def login():
+    return render_template("login.html")
 
 @app.route("/process", methods=["POST"])
 def process():
